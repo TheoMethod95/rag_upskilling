@@ -1,0 +1,6 @@
+boto3
+fastapi
+uvicorn
+faiss-cpu
+numpy
+pydantic
