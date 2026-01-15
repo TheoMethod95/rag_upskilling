@@ -4,3 +4,5 @@ uvicorn
 faiss-cpu
 numpy
 pydantic
+streamlit
+requests

@@ -210,7 +210,11 @@ def rag_query(user_question, state, top_k=3):
                 "role": "user",
                 "content": (
                     "Answer the question using ONLY the context below.\n"
-                    "If you use information from the context, cite the document name.\n\n"
+                    "Return your response in the following format:\n\n"
+                    "Answer:\n<one concise paragraph>\n\n"
+                    "Sources:\n"
+                    "- <document_id> (word range start_word–end_word)\n\n"
+                    "If the answer cannot be found, say: 'Not found in provided documents.'\n\n"
                     "Context:\n"
                     f"{chr(10).join(retrieved_chunks)}\n\n"
                     f"Question: {user_question}"
@@ -228,6 +232,10 @@ def rag_query(user_question, state, top_k=3):
         contentType="application/json"
     )
     answer = json.loads(response['body'].read())
-    return answer['content'][0]['text']
+    
+    return {
+    "answer": answer['content'][0]['text'],
+    "sources": citations
+}
 
 
