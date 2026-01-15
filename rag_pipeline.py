@@ -233,9 +233,14 @@ def rag_query(user_question, state, top_k=3):
     )
     answer = json.loads(response['body'].read())
     
+    answer_text = answer['content'][0]['text']
+
+    # Optional: remove "Answer:" prefix if model included it
+    answer_text = answer_text.replace("Answer:", "").split("Sources:")[0].strip()
+
     return {
-    "answer": answer['content'][0]['text'],
-    "citations": citations
-}
+        "answer": answer_text,
+        "citations": citations  # dynamic per query
+    }
 
 

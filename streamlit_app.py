@@ -23,18 +23,16 @@ if st.button("Ask"):
             data = response.json()
             
             st.subheader("Answer")
-            # if answer is a dict
-            if isinstance(data["answer"], dict):
-                st.write(data["answer"]["answer"])
-            else:
-                st.write(data["answer"])
+            st.write(data["answer"])  # always just the answer text
 
             if "citations" in data and data["citations"]:
                 st.subheader("Citations")
                 for c in data["citations"]:
-                    st.write(
+                    # make the S3 source clickable
+                    st.markdown(
                         f"- **{c['document']}** "
-                        f"(words {c['start_word']}–{c['end_word']})"
+                        f"(words {c['start_word']}–{c['end_word']}) "
+                        f"[link]({c['source']})"
                     )
         else:
             st.error(f"Error from API: {response.status_code} - {response.text}")
