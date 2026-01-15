@@ -32,7 +32,6 @@ if st.button("Ask"):
                     st.markdown(
                         f"- **{c['document']}** "
                         f"(words {c['start_word']}–{c['end_word']}) "
-                        f"[link]({c['source']})"
                     )
         else:
             st.error(f"Error from API: {response.status_code} - {response.text}")
