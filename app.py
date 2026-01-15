@@ -13,5 +13,10 @@ class QueryRequest(BaseModel):
 
 @app.post("/query")
 def query_rag(req: QueryRequest):
-    answer = rag_query(req.question, state)
-    return {"question": req.question, "answer": answer}
+    result = rag_query(req.question, state)  # {"answer": ..., "citations": [...]}
+    return {
+        "question": req.question,
+        "answer": result["answer"],       # plain string
+        "citations": result["citations"] # list
+    }
+
