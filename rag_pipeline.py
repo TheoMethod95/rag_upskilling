@@ -235,7 +235,7 @@ def rag_query(user_question, state, top_k=3):
     
     return {
     "answer": answer['content'][0]['text'],
-    "sources": citations
+    "citations": citations
 }
 
 
