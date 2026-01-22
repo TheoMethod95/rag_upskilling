@@ -29,7 +29,7 @@ def build_rag_pipeline():
     s3 = session.client("s3")
     bedrock_runtime = session.client("bedrock-runtime")
 
-    documents = []
+    
 
     # List all objects in the bucket
     response = s3.list_objects_v2(Bucket=S3_BUCKET)
@@ -41,6 +41,7 @@ def build_rag_pipeline():
     if not txt_files:
         raise ValueError(f"No .txt files found in bucket {S3_BUCKET}")
 
+    documents = []
     for obj in txt_files:
         key = obj["Key"]
         last_modified = obj["LastModified"].isoformat()  # for freshness checks
@@ -64,7 +65,7 @@ def build_rag_pipeline():
     # -----------------------------
     # Step 2: Chunk documents
     # -----------------------------
-    def chunk_text_with_metadata(text, chunk_size=20):
+    def chunk_text_with_metadata(text, chunk_size=200):
         words = text.split()
         chunks = []
         for i in range(0, len(words), chunk_size):
@@ -98,60 +99,94 @@ def build_rag_pipeline():
 
         with open(EMBEDDINGS_FILE, "r") as f:
             embeddings = json.load(f)
-
+        embedded_chunks = {
+            (e["document_id"], e["chunk_id"]) for e in embeddings
+        }
+        print(f"Found existing embeddings for {len(embedded_chunks)} chunks.")
     else:
-        print("Persisted embeddings not found. Generating now.", flush=True)
-
         embeddings = []
-        for item in all_chunks:
-            payload = {
-                "inputText": item["chunk"],
-                "embeddingTypes": ["binary"]
-            }
-            
-            response = bedrock_runtime.invoke_model(
-                modelId=EMBEDDING_MODEL,
-                body=json.dumps(payload),
-                accept="application/json",
-                contentType="application/json"
-            )
-            
-            result = json.loads(response['body'].read())
-            
-            embeddings.append({
-                "document_id": item["document_id"],
-                "chunk_id": item["chunk_id"],
-                "chunk": item["chunk"],
-                "start_word": item["start_word"],
-                "end_word": item["end_word"],
-                "source": item["source"],
-                "embedding": result["embeddingsByType"]["binary"]
-            })
+        embedded_chunks = set()
+        print("No existing embeddings found. Starting fresh.")
+    
+    # -----------------------------
+    # Step 3b: Generate embeddings for NEW chunks only
+    # -----------------------------
+    new_embeddings = []
 
+    for item in all_chunks:
+        if (item["document_id"], item["chunk_id"]) in embedded_chunks:
+            continue  # skip already embedded
+        payload = {
+            "inputText": item["chunk"],
+            "embeddingTypes": ["float"]
+        }
 
+        response = bedrock_runtime.invoke_model(
+            modelId=EMBEDDING_MODEL,
+            body=json.dumps(payload),
+            accept="application/json",
+            contentType="application/json"
+        )
+
+        result = json.loads(response['body'].read())
+
+        new_embeddings.append({
+            "document_id": item["document_id"],
+            "chunk_id": item["chunk_id"],
+            "chunk": item["chunk"],
+            "start_word": item["start_word"],
+            "end_word": item["end_word"],
+            "source": item["source"],
+            "embedding": result["embeddingsByType"]["float"]
+        })
+
+    if new_embeddings:
+        print(f"Generated {len(new_embeddings)} new embeddings")
+        embeddings.extend(new_embeddings)
+
+        # Save embeddings
         with open(EMBEDDINGS_FILE, "w") as f:
             json.dump(embeddings, f)
-        print("Saved embeddings for future runs", flush=True)
+    else:
+        print("No new embeddings to generate")
 
     # -----------------------------
-    # Step 4: Create FAISS index
+    # Step 4: Update or create FAISS index
     # -----------------------------
+    dim = len(embeddings[0]["embedding"])
+
+    # Convert embeddings to numpy
+    def to_vectors(emb_list):
+        return np.array([e["embedding"] for e in emb_list]).astype("float32")
+
     if os.path.exists(FAISS_FILE):
-        print("Found persisted FAISS index", flush=True)
         index = faiss.read_index(FAISS_FILE)
+        print("Loaded existing FAISS index")
+
+        if new_embeddings:
+            vectors = to_vectors(new_embeddings)
+            faiss.normalize_L2(vectors)
+
+            # IDs must match positions in embeddings list
+            start_id = len(embeddings) - len(new_embeddings)
+            ids = np.arange(start_id, start_id + len(new_embeddings))
+
+            index.add_with_ids(vectors, ids)
+            faiss.write_index(index, FAISS_FILE)
+            print("Updated FAISS index with new embeddings")
 
     else:
-        print("Persisted FAISS index not found. Generating now.", flush=True)
+        print("Creating new FAISS index")
 
-        dim = len(embeddings[0]["embedding"])
-        index = faiss.IndexFlatL2(dim)
-        vectors = np.array([e["embedding"] for e in embeddings]).astype("float32")
-        index.add(vectors)
-        print("FAISS index created with", index.ntotal, "vectors", flush=True)
+        index = faiss.IndexIDMap(faiss.IndexFlatIP(dim))
 
+        vectors = to_vectors(embeddings)
+        faiss.normalize_L2(vectors)
+        ids = np.arange(len(embeddings))
+
+        index.add_with_ids(vectors, ids)
         faiss.write_index(index, FAISS_FILE)
-
-        print("FAISS index saved to disk.", flush=True)
+        print("Saved FAISS index to disk")
 
     return {
         "index": index,
@@ -167,10 +202,10 @@ def rag_query(user_question, state, top_k=3):
     embeddings = state["embeddings"]
     bedrock_runtime = state["bedrock_runtime"]
     
-    # 1️⃣ Generate embedding for question
+    # 1. Generate embedding for question
     payload = {
         "inputText": user_question,
-        "embeddingTypes": ["binary"]
+        "embeddingTypes": ["float"]
     }
     response = bedrock_runtime.invoke_model(
         modelId=EMBEDDING_MODEL,
@@ -179,16 +214,33 @@ def rag_query(user_question, state, top_k=3):
         contentType="application/json"
     )
     result = json.loads(response['body'].read())
-    query_vector = np.array(result['embeddingsByType']['binary']).astype("float32").reshape(1, -1)
+    query_vector = np.array(result['embeddingsByType']['float']).astype("float32").reshape(1, -1)
+    faiss.normalize_L2(query_vector)
     
-    # 2️⃣ Retrieve top-k chunks from FAISS
+    # 2. Retrieve top-k chunks from FAISS
     D, I = index.search(query_vector, top_k)
+    SIM_THRESHOLD = 0.45
+
+    print("Scores:", D[0])
+    # Pair scores with embedding IDs and filter
+    filtered = [
+        (score, embedding_id)
+        for score, embedding_id in zip(D[0], I[0])
+        if score >= SIM_THRESHOLD
+    ]
+
+    # If nothing is relevant enough, return early
+    if not filtered:
+        return {
+            "answer": "Not found in provided documents.",
+            "citations": []
+        }
 
     retrieved_chunks = []
     citations = []
 
-    for idx in I[0]:
-        metadata = embeddings[idx]   # ✅ THIS is where it goes
+    for score, embedding_id in filtered:
+        metadata = embeddings[int(embedding_id)]
 
         retrieved_chunks.append(
             f"[{metadata['document_id']}]\n{metadata['chunk']}"
@@ -202,29 +254,29 @@ def rag_query(user_question, state, top_k=3):
             "end_word": metadata["end_word"]
         })
     
-    # 3️⃣ Build prompt for Claude
+    # 3. Build prompt for Claude
     prompt = {
         "anthropic_version": "bedrock-2023-05-31",
         "messages": [
             {
                 "role": "user",
                 "content": (
-                    "Answer the question using ONLY the context below.\n"
-                    "Return your response in the following format:\n\n"
-                    "Answer:\n<one concise paragraph>\n\n"
-                    "Sources:\n"
-                    "- <document_id> (word range start_word–end_word)\n\n"
-                    "If the answer cannot be found, say: 'Not found in provided documents.'\n\n"
+                    "You are a factual QA assistant.\n"
+                    "Use ONLY the provided context to answer.\n"
+                    "If the answer is not explicitly stated, reply exactly:\n"
+                    "'Not found in provided documents.' And nothing else\n\n"
                     "Context:\n"
                     f"{chr(10).join(retrieved_chunks)}\n\n"
-                    f"Question: {user_question}"
+                    "Question:\n"
+                    f"{user_question}\n\n"
+                    "Answer in 3–5 sentences max."
                 )
             }
         ],
         "max_tokens": 300
     }
     
-    # 4️⃣ Invoke Claude
+    #4.Invoke Claude
     response = bedrock_runtime.invoke_model(
         modelId=LLM_MODEL,
         body=json.dumps(prompt),
@@ -238,9 +290,12 @@ def rag_query(user_question, state, top_k=3):
     # Optional: remove "Answer:" prefix if model included it
     answer_text = answer_text.replace("Answer:", "").split("Sources:")[0].strip()
 
+    if answer_text.lower().startswith("not found"):
+        citations = []
+
+
     return {
         "answer": answer_text,
-        "citations": citations  # dynamic per query
+        "citations": citations
     }
-
 
