@@ -287,7 +287,7 @@ def rag_query(user_question, state, top_k=3):
     
     answer_text = answer['content'][0]['text']
 
-    # Optional: remove "Answer:" prefix if model included it
+    # Remove "Answer:" prefix
     answer_text = answer_text.replace("Answer:", "").split("Sources:")[0].strip()
 
     if answer_text.lower().startswith("not found"):
