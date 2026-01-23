@@ -221,7 +221,6 @@ def rag_query(user_question, state, top_k=3):
     D, I = index.search(query_vector, top_k)
     SIM_THRESHOLD = 0.45
 
-    print("Scores:", D[0])
     # Pair scores with embedding IDs and filter
     filtered = [
         (score, embedding_id)

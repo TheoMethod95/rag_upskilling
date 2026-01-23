@@ -4,15 +4,16 @@ import boto3
 from io import BytesIO
 import os
 from upload_and_update import upload_and_update
+from delete_and_update import delete_and_update
 
-#API_URL = "http://100.48.51.196:8000/query"
-API_URL = "http://localhost:8000/query"
+API_URL = "http://3.234.222.103:8000/query"
+#API_URL = "http://localhost:8000/query"
 
 
 st.set_page_config(page_title="RAG Demo", layout="wide")
 st.title("RAG Question Answering about Bolivian History")
 
-tab = st.sidebar.radio("Navigation", ["Ask Question", "Upload New Data"])
+tab = st.sidebar.radio("Navigation", ["Ask Question", "Upload New Data", "Delete Data"])
 
 if tab == "Ask Question":
     question = st.text_input("Ask a question about Bolivian History:")
@@ -59,3 +60,21 @@ elif tab == "Upload New Data":
             with st.spinner("Uploading files and updating RAG index..."):
                 upload_and_update(temp_paths)
             st.success("Files uploaded and RAG index updated!")
+
+elif tab == "Delete Data":
+    st.subheader("Delete a file")
+
+    session = boto3.Session(profile_name="genai-bedrock", region_name="us-east-1")
+    s3 = session.client("s3")
+    resp = s3.list_objects_v2(Bucket="my-bedrock-docs-123")
+    files = [o["Key"] for o in resp.get("Contents", []) if o["Key"].endswith(".txt")]
+
+    file_to_delete = st.selectbox("Select file", files)
+
+    if st.button("Delete"):
+        with st.spinner("Deleting and rebuilding RAG..."):
+            delete_and_update([file_to_delete])
+
+        st.success("Deleted and RAG updated")
+
+
