@@ -5,9 +5,11 @@ from io import BytesIO
 import os
 from upload_and_update import upload_and_update
 from delete_and_update import delete_and_update
+import yaml
 
-#API_URL = "http://3.234.222.103:8000/query"
-API_URL = "http://localhost:8000/query"
+with open("config/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+API_URL = config["api"]["ip"] + ":" + str(config["api"]["port"]) + "/query"
 
 
 st.set_page_config(page_title="RAG Demo", layout="wide")

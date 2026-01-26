@@ -1,7 +1,10 @@
 import requests
+import yaml
 
-DELETE_API_URL = "http://localhost:8000/delete"
-#DELETE_API_URL = "http://3.234.222.103:8000/delete"
+with open("config/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+
+DELETE_API_URL = config["api"]["ip"] + ":" + str(config["api"]["port"]) + "/delete"   
 
 def delete_and_update(file_keys: list):
     """

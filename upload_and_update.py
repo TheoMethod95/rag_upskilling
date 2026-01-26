@@ -1,8 +1,11 @@
-# upload_and_update.py
 import boto3
 import os
 import requests
 from rag_pipeline import build_rag_pipeline
+import yaml
+
+with open("config/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
 # -----------------------------
 # Config
@@ -11,8 +14,7 @@ PROFILE_NAME = "genai-bedrock"
 REGION_NAME = "us-east-1"
 S3_BUCKET = "my-bedrock-docs-123"
 
-UPDATE_API_URL = "http://localhost:8000/update"
-#UPDATE_API_URL = "http://3.234.222.103:8000/update"
+UPDATE_API_URL = config["api"]["ip"] + ":" + str(config["api"]["port"]) + "/update"
 
 session = boto3.Session(profile_name=PROFILE_NAME, region_name=REGION_NAME)
 s3 = session.client("s3", region_name=REGION_NAME)
