@@ -1,15 +1,15 @@
 import requests
 
-#DELETE_API_URL = "http://localhost:8000/delete"
-DELETE_API_URL = "http://3.234.222.103:8000/delete"
+DELETE_API_URL = "http://localhost:8000/delete"
+#DELETE_API_URL = "http://3.234.222.103:8000/delete"
 
 def delete_and_update(file_keys: list):
     """
     Request deletion + reindex from the RAG API.
     """
     for key in file_keys:
-        if not key.endswith(".txt"):
-            print(f"Skipping {key}: Only .txt files are allowed")
+        if not key.endswith(".txt") and not key.endswith(".pdf"):
+            print(f"Skipping {key}: Only .txt and .pdf files are allowed")
             continue
 
         print(f"Requesting deletion of {key}...")

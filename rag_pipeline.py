@@ -4,6 +4,8 @@ import faiss
 import numpy as np
 import sys
 import os
+from PyPDF2 import PdfReader
+import io
 
 # -----------------------------
 # Step 0: Config
@@ -35,20 +37,30 @@ def build_rag_pipeline():
     response = s3.list_objects_v2(Bucket=S3_BUCKET)
     all_objects = response.get("Contents", [])
 
-    # Filter for .txt files
-    txt_files = [obj for obj in all_objects if obj["Key"].endswith(".txt")]
+    # Filter for compatible files
+    supported_extensions = (".txt", ".pdf")
+    files_to_process = [obj for obj in all_objects if obj["Key"].lower().endswith(supported_extensions)]
 
-    if not txt_files:
-        raise ValueError(f"No .txt files found in bucket {S3_BUCKET}")
+    if not files_to_process:
+        raise ValueError(f"No compatible files (.txt/.pdf) found in bucket {S3_BUCKET}")
 
     documents = []
-    for obj in txt_files:
+    for obj in files_to_process:
         key = obj["Key"]
         last_modified = obj["LastModified"].isoformat()  # for freshness checks
         size = obj["Size"]
 
         s3_obj = s3.get_object(Bucket=S3_BUCKET, Key=key)
-        text = s3_obj["Body"].read().decode("utf-8")
+
+        if key.lower().endswith(".txt"):
+            text = s3_obj["Body"].read().decode("utf-8")
+        elif key.lower().endswith(".pdf"):
+            pdf_bytes = s3_obj["Body"].read()
+            pdf_stream = io.BytesIO(pdf_bytes)
+            reader = PdfReader(pdf_stream)
+            text = "\n".join(
+                page.extract_text() or "" for page in reader.pages
+            )
 
         documents.append({
             "key": key,

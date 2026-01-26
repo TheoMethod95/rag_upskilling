@@ -6,3 +6,4 @@ numpy
 pydantic
 streamlit
 requests
+PyPDF2

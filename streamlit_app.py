@@ -6,8 +6,8 @@ import os
 from upload_and_update import upload_and_update
 from delete_and_update import delete_and_update
 
-API_URL = "http://3.234.222.103:8000/query"
-#API_URL = "http://localhost:8000/query"
+#API_URL = "http://3.234.222.103:8000/query"
+API_URL = "http://localhost:8000/query"
 
 
 st.set_page_config(page_title="RAG Demo", layout="wide")
@@ -30,7 +30,7 @@ if tab == "Ask Question":
             if response.status_code == 200:
                 data = response.json()
                 st.subheader("Answer")
-                st.write(data["answer"])
+                st.markdown(data["answer"], unsafe_allow_html=False)
                 if "citations" in data and data["citations"]:
                     st.subheader("Citations")
                     for c in data["citations"]:
@@ -41,8 +41,8 @@ if tab == "Ask Question":
                 st.error(f"Error from API: {response.status_code} - {response.text}")
 
 elif tab == "Upload New Data":
-    st.subheader("Upload new .txt files to S3")
-    uploaded_files = st.file_uploader("Drag and drop .txt files", accept_multiple_files=True, type=["txt"])
+    st.subheader("Upload new .txt or .pdf files to S3")
+    uploaded_files = st.file_uploader("Drag and drop .txt or .pdf files", accept_multiple_files=True, type=["txt", "pdf"])
 
     if st.button("Upload and Update"):
         if not uploaded_files:
@@ -67,7 +67,7 @@ elif tab == "Delete Data":
     session = boto3.Session(profile_name="genai-bedrock", region_name="us-east-1")
     s3 = session.client("s3")
     resp = s3.list_objects_v2(Bucket="my-bedrock-docs-123")
-    files = [o["Key"] for o in resp.get("Contents", []) if o["Key"].endswith(".txt")]
+    files = [o["Key"] for o in resp.get("Contents", []) if o["Key"].lower().endswith(".txt") or o["Key"].lower().endswith(".pdf")]
 
     file_to_delete = st.selectbox("Select file", files)
 
