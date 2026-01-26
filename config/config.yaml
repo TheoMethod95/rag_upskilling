@@ -1,4 +1,4 @@
 api:
-  ip: 3.233.226.132
-  #ip:localhost
+  ip: http://3.233.226.132
+  #ip: http://localhost
   port: 8000
