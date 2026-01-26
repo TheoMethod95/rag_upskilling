@@ -272,11 +272,15 @@ def rag_query(user_question, state, top_k=3):
             {
                 "role": "user",
                 "content": (
-                    "You are a factual QA assistant working for the Dohtem company.\n"
-                    "Dohtem has a large number of documents from vendors and third-party companies.\n"
-                    "Use ONLY the provided context to answer.\n"
-                    "If the answer is not explicitly stated, reply exactly:\n"
-                    "'Not found in provided documents.' And nothing else\n\n"
+                    "You are a factual question-answering assistant working for Dohtem.\n"
+                    "Dohtem is a large company and maintains internal documents from vendors and third-party suppliers.\n\n"
+
+                    "STRICT RULES:\n"
+                    "1. Use ONLY the information explicitly stated in the provided context.\n"
+                    "2. Do NOT use prior knowledge, assumptions, or general world knowledge.\n"
+                    "3. If the answer cannot be fully answered using the context, reply with EXACTLY:\n"
+                    "'Not found in provided documents.'\n"
+                    "4. Do NOT add explanations, summaries, or partial answers when the answer is not found.\n\n"
                     "Context:\n"
                     f"{chr(10).join(retrieved_chunks)}\n\n"
                     "Question:\n"
