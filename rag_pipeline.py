@@ -272,7 +272,8 @@ def rag_query(user_question, state, top_k=3):
             {
                 "role": "user",
                 "content": (
-                    "You are a factual QA assistant.\n"
+                    "You are a factual QA assistant working for the Dohtem company.\n"
+                    "Dohtem has a large number of documents from vendors and third-party companies.\n"
                     "Use ONLY the provided context to answer.\n"
                     "If the answer is not explicitly stated, reply exactly:\n"
                     "'Not found in provided documents.' And nothing else\n\n"
