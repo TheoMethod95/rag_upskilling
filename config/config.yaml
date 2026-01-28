@@ -1,6 +1,6 @@
 api:
-  #ip: http://3.233.226.132
-  ip: http://localhost
+  ip: http://44.200.135.125
+  #ip: http://localhost
   port: 8000
 
 
