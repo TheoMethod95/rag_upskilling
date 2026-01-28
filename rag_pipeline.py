@@ -6,6 +6,11 @@ import sys
 import os
 from PyPDF2 import PdfReader
 import io
+import re
+import yaml
+
+with open("config/config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
 # -----------------------------
 # Step 0: Config
@@ -18,8 +23,62 @@ LLM_MODEL = "anthropic.claude-3-sonnet-20240229-v1:0"
 # -----------------------------
 FAISS_FILE = "data_store/faiss.index"
 EMBEDDINGS_FILE = "data_store/embeddings.json"
+# -----------------------------
+BANNED_PATTERNS = {
+    k: [re.compile(p, re.IGNORECASE) for p in v]
+    for k, v in config["banned_patterns"].items()
+}
+BLOCKED_RESPONSES = config["blocked_responses"]
+CLASSIFIER_LABELS = list(config["classifier_labels"])
 
 os.makedirs("data_store", exist_ok=True)
+
+
+def hardcoded_guardrail_check(text: str):
+    for category, patterns in BANNED_PATTERNS.items():
+        for pattern in patterns:
+            if pattern.search(text):
+                return category
+    return "benign"
+
+def classify_intent(user_question, bedrock_runtime):
+    labels_formatted = "\n".join(f"- {label}" for label in CLASSIFIER_LABELS)
+
+    classifier_prompt = {
+    "anthropic_version": "bedrock-2023-05-31",
+    "messages": [
+        {
+            "role": "user",
+            "content": (
+                "Classify the intent of the following user question.\n\n"
+                "Choose EXACTLY one and only one label from this list:\n"
+                f"{labels_formatted}\n\n"
+                "Respond with ONLY the label.\n\n"
+                f"Question:\n{user_question}"
+            )
+        }
+    ],
+    "max_tokens": 20
+    }
+
+    response = bedrock_runtime.invoke_model(
+        modelId=LLM_MODEL,
+        body=json.dumps(classifier_prompt),
+        accept="application/json",
+        contentType="application/json"
+    )
+
+    result = json.loads(response["body"].read())
+    label = result["content"][0]["text"].strip().lower()
+
+    # Defensive parsing
+    label = label.split()[0].replace(".", "").strip().lower()
+
+
+    if label not in CLASSIFIER_LABELS:
+        label = "benign"
+
+    return label
 
 
 def build_rag_pipeline():
@@ -165,6 +224,9 @@ def build_rag_pipeline():
     # -----------------------------
     # Step 4: Update or create FAISS index
     # -----------------------------
+    if not embeddings:
+        raise RuntimeError("No embeddings available to build FAISS index.")
+
     dim = len(embeddings[0]["embedding"])
 
     # Convert embeddings to numpy
@@ -213,6 +275,27 @@ def rag_query(user_question, state, top_k=3):
     index = state["index"]
     embeddings = state["embeddings"]
     bedrock_runtime = state["bedrock_runtime"]
+
+
+    # -----------------------------
+    # Guardrail Layer 1: Hardcoded
+    # -----------------------------
+    hardcoded_result = hardcoded_guardrail_check(user_question)
+    if hardcoded_result != "benign":
+        return {
+            "answer": BLOCKED_RESPONSES[hardcoded_result],
+            "citations": []
+        }
+
+    # -----------------------------
+    # Guardrail Layer 2: LLM Classifier
+    # -----------------------------
+    intent = classify_intent(user_question, bedrock_runtime)
+    if intent != "benign":
+        return {
+            "answer": BLOCKED_RESPONSES.get(intent, "I can’t help with that request."),
+            "citations": []
+        }
     
     # 1. Generate embedding for question
     payload = {
@@ -231,7 +314,7 @@ def rag_query(user_question, state, top_k=3):
     
     # 2. Retrieve top-k chunks from FAISS
     D, I = index.search(query_vector, top_k)
-    SIM_THRESHOLD = 0.45
+    SIM_THRESHOLD = 0.38
 
     # Pair scores with embedding IDs and filter
     filtered = [

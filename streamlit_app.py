@@ -12,13 +12,13 @@ with open("config/config.yaml", "r") as f:
 API_URL = config["api"]["ip"] + ":" + str(config["api"]["port"]) + "/query"
 
 
-st.set_page_config(page_title="RAG Demo", layout="wide")
-st.title("RAG Question Answering about Dohtems vendors and third-party partners")
+st.set_page_config(page_title="Dohtem RAG Demo", layout="wide")
+st.title("RAG Question Answering about Dohtem's vendors and third-party partners")
 
 tab = st.sidebar.radio("Navigation", ["Ask Question", "Upload New Data", "Delete Data"])
 
 if tab == "Ask Question":
-    question = st.text_input("Ask a question about Dohtems vendors and third-party partners:")
+    question = st.text_input("Ask a question about Dohtem's vendors and third-party partners:")
     if st.button("Ask"):
         if not question.strip():
             st.warning("Please enter a question.")

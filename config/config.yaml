@@ -1,4 +1,33 @@
 api:
-  ip: http://3.233.226.132
-  #ip: http://localhost
+  #ip: http://3.233.226.132
+  ip: http://localhost
   port: 8000
+
+
+banned_patterns:
+  self_harm:
+    - "kill myself"
+    - "suicide"
+    - "self harm"
+    - "end my life"
+
+  violence:
+    - "how to kill"
+    - "shoot"
+    - "bomb"
+    - "murder"
+
+blocked_responses:
+  self_harm: "I can’t help with requests involving self harm."
+  violence: "I can’t help with requests involving violence."
+  sexual: "I can’t help with that request."
+  illegal: "I can’t assist with illegal activities."
+  hate: "I can’t assist with hateful or harmful content."
+
+classifier_labels:
+  - benign
+  - self_harm
+  - violence
+  - sexual
+  - illegal
+  - hate
